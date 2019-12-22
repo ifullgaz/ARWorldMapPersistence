@@ -46,55 +46,63 @@ public enum ARWorldMapPersistenceError: Error {
 }
 
 public protocol ARWorldMapPersistence {
-    func worldMapData(from view: ARSCNView, block: @escaping (Data?, Error?) -> Void)
-    func worldMap(from data: Data) throws -> (ARWorldMap, UIImage?)?
+    func getWorldMapData(from view: ARSCNView, block: @escaping (Data?, Error?) -> Void)
+    func getWorldMap(from data: Data, block: @escaping (ARWorldMap?, UIImage?, Error?) -> Void)
 }
 
 public extension ARWorldMapPersistence {
-    func worldMapData(from view: ARSCNView, block: @escaping (Data?, Error?) -> Void) {
-        
+    func getWorldMapData(from view: ARSCNView, block: @escaping (Data?, Error?) -> Void) {
         view.session.getCurrentWorldMap { worldMap, error in
-            var err: ARWorldMapPersistenceError?
-            var data: Data?
-            
-            if let map = worldMap {
-                // Add a snapshot image indicating where the map was captured.
-                if let snapshotAnchor = SnapshotAnchor(capturing: view) {
-                    map.anchors.append(snapshotAnchor)
-                    do {
-                        data = try NSKeyedArchiver.archivedData(withRootObject: map, requiringSecureCoding: true)
-                    } catch {
-                        err = .cantSaveWorldMap(reason: error.localizedDescription)
+            DispatchQueue.global(qos: .default).async {
+                var data: Data?
+                var err: ARWorldMapPersistenceError?
+                if let map = worldMap {
+                    // Add a snapshot image indicating where the map was captured.
+                    if let snapshotAnchor = ARSnapshotAnchor(capturing: view) {
+                        map.anchors.append(snapshotAnchor)
+                        do {
+                            data = try NSKeyedArchiver.archivedData(withRootObject: map, requiringSecureCoding: true)
+                        } catch {
+                            err = .cantSaveWorldMap(reason: error.localizedDescription)
+                        }
+                    } else {
+                        err = .cantGetWorldMapSnapshot
                     }
                 } else {
-                    err = .cantGetWorldMapSnapshot
+                    err = .cantGetWorldMap(reason: error!.localizedDescription)
                 }
-            } else {
-                err = .cantGetWorldMap(reason: error!.localizedDescription)
+                DispatchQueue.main.async {
+                    block(data, err)
+                }
             }
-
-            block(data, err)
         }
     }
-    
-    func worldMap(from data: Data) throws -> (ARWorldMap, UIImage?)? {
-        var snapshot: UIImage?
-        do {
-            guard let worldMap = try NSKeyedUnarchiver.unarchivedObject(ofClass: ARWorldMap.self, from: data) else {
-                throw ARWorldMapPersistenceError.cantLoadWorldMap(reason: "No world map in archive")
+
+    func getWorldMap(from data: Data, block: @escaping (ARWorldMap?, UIImage?, Error?) -> Void) {
+        DispatchQueue.global(qos: .default).async {
+            var worldMap: ARWorldMap?
+            var snapshot: UIImage?
+            var err: ARWorldMapPersistenceError?
+            do {
+                guard let map = try NSKeyedUnarchiver.unarchivedObject(ofClass: ARWorldMap.self, from: data) else {
+                    throw ARWorldMapPersistenceError.cantLoadWorldMap(reason: "No world map in archive")
+                }
+                worldMap = map
+                // Display the snapshot image stored in the world map to aid user in relocalizing.
+                if let snapshotData = worldMap!.snapshotAnchor?.imageData,
+                   let snapshotImage = UIImage(data: snapshotData) {
+                    snapshot = snapshotImage
+                }
+                // Remove the snapshot anchor from the world map since we do not need it in the scene.
+                worldMap!.anchors.removeAll(where: { $0 is ARSnapshotAnchor })
+            } catch let error as ARWorldMapPersistenceError {
+                err = error
+            } catch {
+                err = .cantLoadWorldMap(reason: error.localizedDescription)
             }
-            // Display the snapshot image stored in the world map to aid user in relocalizing.
-            if let snapshotData = worldMap.snapshotAnchor?.imageData,
-               let snapshotImage = UIImage(data: snapshotData) {
-                snapshot = snapshotImage
+            DispatchQueue.main.async {
+                block(worldMap, snapshot, err)
             }
-            // Remove the snapshot anchor from the world map since we do not need it in the scene.
-            worldMap.anchors.removeAll(where: { $0 is SnapshotAnchor })
-            return (worldMap, snapshot)
-        } catch let error as ARWorldMapPersistenceError {
-            throw error
-        } catch {
-            throw ARWorldMapPersistenceError.cantLoadWorldMap(reason: "Unarchiving failed")
         }
     }
 }

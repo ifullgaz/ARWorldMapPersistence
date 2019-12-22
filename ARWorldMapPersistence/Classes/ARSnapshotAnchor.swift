@@ -25,9 +25,9 @@ private extension CGImagePropertyOrientation {
     }
 }
 
-public class SnapshotAnchor: ARAnchor {
+public class ARSnapshotAnchor: ARAnchor {
     
-    let imageData: Data
+    public var imageData: Data?
     
     public convenience init?(capturing view: ARSCNView) {
         guard let frame = view.session.currentFrame
@@ -45,22 +45,33 @@ public class SnapshotAnchor: ARAnchor {
         self.init(imageData: data, transform: frame.camera.transform)
     }
     
-    public init(imageData: Data, transform: float4x4) {
-        self.imageData = imageData
-        super.init(name: "snapshot", transform: transform)
-    }
-    
-    required public init(anchor: ARAnchor) {
-        self.imageData = (anchor as! SnapshotAnchor).imageData
-        super.init(anchor: anchor)
-    }
-    
     override public class var supportsSecureCoding: Bool {
         return true
     }
+        
+    override public func encode(with aCoder: NSCoder) {
+        super.encode(with: aCoder)
+        aCoder.encode(imageData, forKey: "snapshot_data")
+    }
+
+    required public override init(name: String, transform: simd_float4x4) {
+        super.init(name: name, transform: transform)
+    }
+    
+    public convenience init(imageData: Data, transform: float4x4) {
+        self.init(name: "snapshot", transform: transform)
+        self.imageData = imageData
+    }
+    
+    required public init(anchor: ARAnchor) {
+        if let anchor = anchor as? ARSnapshotAnchor {
+            self.imageData = anchor.imageData
+        }
+        super.init(anchor: anchor)
+    }
     
     required public init?(coder aDecoder: NSCoder) {
-        if let snapshot = aDecoder.decodeObject(forKey: "snapshot") as? Data {
+        if let snapshot = aDecoder.decodeObject(forKey: "snapshot_data") as? Data {
             self.imageData = snapshot
         } else {
             return nil
@@ -68,10 +79,4 @@ public class SnapshotAnchor: ARAnchor {
         
         super.init(coder: aDecoder)
     }
-    
-    override public func encode(with aCoder: NSCoder) {
-        super.encode(with: aCoder)
-        aCoder.encode(imageData, forKey: "snapshot")
-    }
-
 }

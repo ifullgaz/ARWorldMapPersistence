@@ -215,11 +215,17 @@
 			);
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-ARWorldMapPersistence_Example/Pods-ARWorldMapPersistence_Example-frameworks.sh",
+				"${BUILT_PRODUCTS_DIR}/ARFocusSquare/ARFocusSquare.framework",
+				"${BUILT_PRODUCTS_DIR}/ARObject/ARObject.framework",
 				"${BUILT_PRODUCTS_DIR}/ARWorldMapPersistence/ARWorldMapPersistence.framework",
+				"${BUILT_PRODUCTS_DIR}/IFGExtensions/IFGExtensions.framework",
 			);
 			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ARFocusSquare.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ARObject.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ARWorldMapPersistence.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/IFGExtensions.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

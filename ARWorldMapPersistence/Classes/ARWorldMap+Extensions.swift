@@ -9,7 +9,7 @@
 import ARKit
 
 public extension ARWorldMap {
-    var snapshotAnchor: SnapshotAnchor? {
-        return anchors.compactMap { $0 as? SnapshotAnchor }.first
+    var snapshotAnchor: ARSnapshotAnchor? {
+        return anchors.compactMap { $0 as? ARSnapshotAnchor }.first
     }
 }

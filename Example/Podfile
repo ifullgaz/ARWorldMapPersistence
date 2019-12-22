@@ -3,4 +3,14 @@ platform :ios, '13.0'
 target 'ARWorldMapPersistence_Example' do
   use_frameworks!
   pod 'ARWorldMapPersistence', :path => '../'
+  pod 'ARObject'
+end
+
+post_install do |installer|
+  installer.pods_project.build_configurations.each do |config|
+    next unless config.name == 'Debug'
+    config.build_settings['LD_RUNPATH_SEARCH_PATHS'] = [
+      '$(FRAMEWORK_SEARCH_PATHS)'
+    ]
+  end
 end
