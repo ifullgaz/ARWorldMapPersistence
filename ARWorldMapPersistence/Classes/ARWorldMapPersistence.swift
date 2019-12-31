@@ -45,13 +45,20 @@ public enum ARWorldMapPersistenceError: Error {
     }
 }
 
-public protocol ARWorldMapPersistence {
-    func getWorldMapData(from view: ARSCNView, block: @escaping (Data?, Error?) -> Void)
-    func getWorldMap(from data: Data, block: @escaping (ARWorldMap?, UIImage?, Error?) -> Void)
+public typealias ARGetWorldMapDataBlock = (AnyObject?, Error?) -> Void
+
+public typealias ARGetWorldMapBlock = (ARWorldMap?, UIImage?, Error?) -> Void
+
+public protocol ARWorldMapArchiver {
+    func encodeWorldMap(from view: ARSCNView, block: @escaping ARGetWorldMapDataBlock)
+    func decodeWorldMap(from data: Data, block: @escaping ARGetWorldMapBlock)
+    
+    func saveWorldMap(from sceneView: ARSCNView, block: @escaping ARGetWorldMapDataBlock)
+    func loadWorldMap(block: @escaping ARGetWorldMapBlock)
 }
 
-public extension ARWorldMapPersistence {
-    func getWorldMapData(from view: ARSCNView, block: @escaping (Data?, Error?) -> Void) {
+public extension ARWorldMapArchiver {
+    func encodeWorldMap(from view: ARSCNView, block: @escaping ARGetWorldMapDataBlock) {
         view.session.getCurrentWorldMap { worldMap, error in
             DispatchQueue.global(qos: .default).async {
                 var data: Data?
@@ -72,13 +79,13 @@ public extension ARWorldMapPersistence {
                     err = .cantGetWorldMap(reason: error!.localizedDescription)
                 }
                 DispatchQueue.main.async {
-                    block(data, err)
+                    block(data as AnyObject, err)
                 }
             }
         }
     }
 
-    func getWorldMap(from data: Data, block: @escaping (ARWorldMap?, UIImage?, Error?) -> Void) {
+    func decodeWorldMap(from data: Data, block: @escaping ARGetWorldMapBlock) {
         DispatchQueue.global(qos: .default).async {
             var worldMap: ARWorldMap?
             var snapshot: UIImage?
@@ -104,5 +111,71 @@ public extension ARWorldMapPersistence {
                 block(worldMap, snapshot, err)
             }
         }
+    }
+}
+
+
+open class ARWorldMapFileArchiver: ARWorldMapArchiver {
+    
+    public var fileName: String?
+    
+    public var fileURL: URL {
+        guard let fileName = self.fileName else {
+            fatalError("Can't get file save URL: fileName is nil")
+        }
+        do {
+            return try FileManager.default
+                .url(for: .documentDirectory,
+                     in: .userDomainMask,
+                     appropriateFor: nil,
+                     create: true)
+                .appendingPathComponent("\(fileName).armap")
+        } catch {
+            fatalError("Can't get file save URL: \(error.localizedDescription)")
+        }
+    }
+
+    public func fileExists() -> Bool {
+        return FileManager.default.fileExists(atPath: fileURL.relativePath)
+    }
+    
+    open func saveWorldMap(from sceneView: ARSCNView, block: @escaping ARGetWorldMapDataBlock) {
+        self.encodeWorldMap(from: sceneView) { (data, error) in
+            DispatchQueue.global(qos: .default).async {
+                do {
+                    if let error = error { throw error }
+                    try data?.write(to: self.fileURL, options: [.atomic])
+                    DispatchQueue.main.async {
+                        block(data, error)
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        block(data, error)
+                    }
+                }
+            }
+        }
+    }
+    
+    open func loadWorldMap(block: @escaping ARGetWorldMapBlock) {
+        DispatchQueue.global(qos: .default).async {
+            do {
+                let data = try Data(contentsOf: self.fileURL)
+                self.decodeWorldMap(from: data) { (worldMap, image, error) in
+                    DispatchQueue.main.async {
+                        block(worldMap, image, error)
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    block(nil, nil, error)
+                }
+            }
+        }
+    }
+    
+    convenience public init(fileName: String) {
+        self.init()
+        self.fileName = fileName
     }
 }
